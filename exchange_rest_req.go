@@ -13,17 +13,6 @@ type ExchangeOrderAPI struct {
 	req    *ExchangeReqCommon[ExchangeOrderAction]
 }
 
-type OrderType struct {
-	Limit *struct {
-		Tif *string `json:"tif" msgpack:"tif"` // tif, "Alo" | "Ioc" | "Gtc" Alo: 只有作为挂单（Maker）时才生效（Post-only）。Ioc: 立即成交否则取消。Gtc: 一直有效直到成交或取消。
-	} `json:"limit,omitempty" msgpack:"limit,omitempty"` // 限价单
-	Trigger *struct {
-		TriggerPx *string `json:"triggerPx" msgpack:"triggerPx"` // triggerPx
-		IsMarket  *bool   `json:"isMarket" msgpack:"isMarket"`
-		Tpsl      *string `json:"tpsl" msgpack:"tpsl"` // tpsl
-	} `json:"trigger,omitempty" msgpack:"trigger,omitempty"` // 触发单/止盈止损
-}
-
 type Order struct {
 	Asset         *int       `json:"a" msgpack:"a"`                     // asset 资产索引（通常是一个整数，代表特定的币种，如 0 可能代表 BTC）。
 	IsBuy         *bool      `json:"b" msgpack:"b"`                     // isBuy true 为买入，false 为卖出。
@@ -34,128 +23,196 @@ type Order struct {
 	ClientOrderId *string    `json:"c,omitempty" msgpack:"c,omitempty"` // cloid (client order id)
 }
 
-func NewModifyOrder() *Order {
-	return &Order{}
+type OrderType struct {
+	Limit   *OrderTypeLimit   `json:"limit,omitempty" msgpack:"limit,omitempty"`     // 限价单
+	Trigger *OrderTypeTrigger `json:"trigger,omitempty" msgpack:"trigger,omitempty"` // 触发单/止盈止损
 }
 
-func (o *Order) Build() Order {
-	return *o
+type OrderTypeLimit struct {
+	Tif *string `json:"tif" msgpack:"tif"` // tif, "Alo" | "Ioc" | "Gtc Alo: 只有作为挂单（Maker）时才生效（Post-only）。Ioc: 立即成交否则取消。Gtc: 一直有效直到成交或取消。
 }
 
-func (o *Order) SetAsset(asset int) *Order {
-	o.Asset = GetPointer(asset)
-	return o
+type OrderTypeTrigger struct {
+	TriggerPx *string `json:"triggerPx" msgpack:"triggerPx"` // triggerPx
+	IsMarket  *bool   `json:"isMarket" msgpack:"isMarket"`
+	Tpsl      *string `json:"tpsl" msgpack:"tpsl"` // tpsl
 }
 
-func (o *Order) SetIsBuy(isBuy bool) *Order {
-	o.IsBuy = GetPointer(isBuy)
-	return o
+type OrderBuilder struct {
+	order *Order
 }
 
-func (o *Order) SetPrice(price string) *Order {
-	o.Price = GetPointer(price)
-	return o
-}
-
-func (o *Order) SetSize(size string) *Order {
-	o.Size = GetPointer(size)
-	return o
-}
-
-func (o *Order) SetReduceOnly(reduceOnly bool) *Order {
-	o.ReduceOnly = GetPointer(reduceOnly)
-	return o
-}
-
-func (o *Order) SetClientOrderId(cloid string) *Order {
-	o.ClientOrderId = GetPointer(cloid)
-	return o
-}
-
-func (o *Order) SetLimitTif(tif string) *Order {
-	if o.OrderType == nil {
-		o.OrderType = &OrderType{}
+func NewOrderBuilder() *OrderBuilder {
+	return &OrderBuilder{
+		order: &Order{},
 	}
-	if o.OrderType.Limit == nil {
-		o.OrderType.Limit = &struct {
-			Tif *string `json:"tif" msgpack:"tif"`
-		}{}
-	}
-	o.OrderType.Limit.Tif = GetPointer(tif)
-	return o
 }
 
-func (o *Order) SetTriggerPx(triggerPx string) *Order {
-	if o.OrderType == nil {
-		o.OrderType = &OrderType{}
+func (ob *OrderBuilder) Build() Order {
+	// Manual deep copy to avoid side effects when reusing builder
+	dst := Order{}
+	src := ob.order
+
+	if src.Asset != nil {
+		dst.Asset = GetPointer(*src.Asset)
 	}
-	if o.OrderType.Trigger == nil {
-		o.OrderType.Trigger = &struct {
-			TriggerPx *string `json:"triggerPx" msgpack:"triggerPx"`
-			IsMarket  *bool   `json:"isMarket" msgpack:"isMarket"`
-			Tpsl      *string `json:"tpsl" msgpack:"tpsl"`
-		}{}
+	if src.IsBuy != nil {
+		dst.IsBuy = GetPointer(*src.IsBuy)
 	}
-	o.OrderType.Trigger.TriggerPx = GetPointer(triggerPx)
-	return o
+	if src.Price != nil {
+		dst.Price = GetPointer(*src.Price)
+	}
+	if src.Size != nil {
+		dst.Size = GetPointer(*src.Size)
+	}
+	if src.ReduceOnly != nil {
+		dst.ReduceOnly = GetPointer(*src.ReduceOnly)
+	}
+	if src.ClientOrderId != nil {
+		dst.ClientOrderId = GetPointer(*src.ClientOrderId)
+	}
+
+	if src.OrderType != nil {
+		dst.OrderType = &OrderType{}
+		if src.OrderType.Limit != nil {
+			dst.OrderType.Limit = &OrderTypeLimit{}
+			if src.OrderType.Limit.Tif != nil {
+				dst.OrderType.Limit.Tif = GetPointer(*src.OrderType.Limit.Tif)
+			}
+		}
+		if src.OrderType.Trigger != nil {
+			dst.OrderType.Trigger = &OrderTypeTrigger{}
+			if src.OrderType.Trigger.TriggerPx != nil {
+				dst.OrderType.Trigger.TriggerPx = GetPointer(*src.OrderType.Trigger.TriggerPx)
+			}
+			if src.OrderType.Trigger.IsMarket != nil {
+				dst.OrderType.Trigger.IsMarket = GetPointer(*src.OrderType.Trigger.IsMarket)
+			}
+			if src.OrderType.Trigger.Tpsl != nil {
+				dst.OrderType.Trigger.Tpsl = GetPointer(*src.OrderType.Trigger.Tpsl)
+			}
+		}
+	}
+	return dst
 }
 
-func (o *Order) SetTriggerIsMarket(isMarket bool) *Order {
-	if o.OrderType == nil {
-		o.OrderType = &OrderType{}
-	}
-	if o.OrderType.Trigger == nil {
-		o.OrderType.Trigger = &struct {
-			TriggerPx *string `json:"triggerPx" msgpack:"triggerPx"`
-			IsMarket  *bool   `json:"isMarket" msgpack:"isMarket"`
-			Tpsl      *string `json:"tpsl" msgpack:"tpsl"`
-		}{}
-	}
-	o.OrderType.Trigger.IsMarket = GetPointer(isMarket)
-	return o
+// asset 资产索引（通常是一个整数，代表特定的币种，如 0 可能代表 BTC）。
+func (ob *OrderBuilder) Asset(asset int) *OrderBuilder {
+	ob.order.Asset = GetPointer(asset)
+	return ob
 }
 
-func (o *Order) SetTriggerTpsl(tpsl string) *Order {
-	if o.OrderType == nil {
-		o.OrderType = &OrderType{}
+// isBuy true 为买入，false 为卖出。
+func (ob *OrderBuilder) IsBuy(isBuy bool) *OrderBuilder {
+	ob.order.IsBuy = GetPointer(isBuy)
+	return ob
+}
+
+// price 价格。注意这里是 String，为了保证高精度，避免浮点数误差。
+func (ob *OrderBuilder) Price(price string) *OrderBuilder {
+	ob.order.Price = GetPointer(price)
+	return ob
+}
+
+// size 数量。同样是 String。
+func (ob *OrderBuilder) Size(size string) *OrderBuilder {
+	ob.order.Size = GetPointer(size)
+	return ob
+}
+
+// reduceOnly 只减仓。如果为 true，该订单只会平掉现有仓位，不会开新仓。
+func (ob *OrderBuilder) ReduceOnly(reduceOnly bool) *OrderBuilder {
+	ob.order.ReduceOnly = GetPointer(reduceOnly)
+	return ob
+}
+
+// cloid (client order id)
+func (ob *OrderBuilder) ClientOrderId(cloid string) *OrderBuilder {
+	ob.order.ClientOrderId = GetPointer(cloid)
+	return ob
+}
+
+// ensureOrderType 确保 OrderType 已初始化
+func (ob *OrderBuilder) ensureOrderType() {
+	if ob.order.OrderType == nil {
+		ob.order.OrderType = &OrderType{}
 	}
-	if o.OrderType.Trigger == nil {
-		o.OrderType.Trigger = &struct {
-			TriggerPx *string `json:"triggerPx" msgpack:"triggerPx"`
-			IsMarket  *bool   `json:"isMarket" msgpack:"isMarket"`
-			Tpsl      *string `json:"tpsl" msgpack:"tpsl"`
-		}{}
+}
+
+// ensureLimit 确保 Limit 已初始化，并清除 Trigger 以防冲突
+func (ob *OrderBuilder) ensureLimit() {
+	ob.ensureOrderType()
+	if ob.order.OrderType.Limit == nil {
+		ob.order.OrderType.Limit = &OrderTypeLimit{}
 	}
-	o.OrderType.Trigger.Tpsl = GetPointer(tpsl)
-	return o
+	// 互斥处理：如果是 Limit 单，不应该有 Trigger 属性
+	ob.order.OrderType.Trigger = nil
+}
+
+// ensureTrigger 确保 Trigger 已初始化，并清除 Limit 以防冲突
+func (ob *OrderBuilder) ensureTrigger() {
+	ob.ensureOrderType()
+	if ob.order.OrderType.Trigger == nil {
+		ob.order.OrderType.Trigger = &OrderTypeTrigger{}
+	}
+	// 互斥处理：如果是 Trigger 单，不应该有 Limit 属性
+	ob.order.OrderType.Limit = nil
+}
+
+// tif, "Alo" | "Ioc" | "Gtc Alo: 只有作为挂单（Maker）时才生效（Post-only）。Ioc: 立即成交否则取消。Gtc: 一直有效直到成交或取消。
+func (ob *OrderBuilder) LimitTif(tif string) *OrderBuilder {
+	ob.ensureLimit()
+	ob.order.OrderType.Limit.Tif = GetPointer(tif)
+	return ob
+}
+
+// triggerPx isMarket tpsl
+func (ob *OrderBuilder) Trigger(isMarket bool, triggerPx string, tpsl string) *OrderBuilder {
+	ob.ensureTrigger()
+	ob.order.OrderType.Trigger.IsMarket = GetPointer(isMarket)
+	ob.order.OrderType.Trigger.TriggerPx = GetPointer(triggerPx)
+	ob.order.OrderType.Trigger.Tpsl = GetPointer(tpsl)
+	return ob
 }
 
 type ExchangeOrderAction struct {
-	Type     *string  `json:"type" msgpack:"type"`
-	Orders   *[]Order `json:"orders" msgpack:"orders"`
-	Grouping *string  `json:"grouping,omitempty" msgpack:"grouping,omitempty"` // "na" | "normalTpsl" | "positionTpsl", 订单分组策略，用于处理止盈止损与主仓位的关联逻辑。
-	Builder  *struct {
-		B *string `json:"b" msgpack:"b"` // the address the should receive the additional fee 接收返佣/费用的地址。
-		F *int    `json:"f" msgpack:"f"` // the size of the fee in tenths of a basis point e.g. if f is 10, 1bp of the order notional  will be charged to the user and sent to the builder 费用比例（单位是 0.1 基点）。例如填 10 代表 1 个基点（0.01%）。
-	} `json:"builder,omitempty" msgpack:"builder,omitempty"` // Optional
+	Type     *string                     `json:"type" msgpack:"type"`
+	Orders   *[]Order                    `json:"orders" msgpack:"orders"`
+	Grouping *string                     `json:"grouping,omitempty" msgpack:"grouping,omitempty"` // "na" | "normalTpsl" | "positionTpsl", 订单分组策略，用于处理止盈止损与主仓位的关联逻辑。
+	Builder  *ExchangeOrderActionBuilder `json:"builder,omitempty" msgpack:"builder,omitempty"`   // Optional
 }
 
-// func (api *ExchangeOrderAPI) SetOrders(orders []Order) *ExchangeOrderAPI {
-// 	if api.req == nil {
-// 		api.req = &ExchangeReqCommon[ExchangeOrderAction]{}
-// 	}
-// 	*api.req.Action.Orders = orders
-// 	return api
-// }
+type ExchangeOrderActionBuilder struct {
+	B *string `json:"b" msgpack:"b"` // the address the should receive the additional fee 接收返佣/费用的地址。
+	F *int    `json:"f" msgpack:"f"` // the size of the fee in tenths of a basis point e.g. if f is 10, 1bp of the order notional  will be charged to the user and sent to the builder 费用比例（单位是 0.1 基点）。例如填 10 代表 1 个基点（0.01%）。
+}
 
-func (api *ExchangeOrderAPI) AddOrder(order Order) *ExchangeOrderAPI {
+func (api *ExchangeOrderAPI) Type(t string) *ExchangeOrderAPI {
+	api.req.Action.Type = GetPointer(t)
+	return api
+}
+
+func (api *ExchangeOrderAPI) Grouping(grouping string) *ExchangeOrderAPI {
+	api.req.Action.Grouping = GetPointer(grouping)
+	return api
+}
+
+func (api *ExchangeOrderAPI) Builder(b string, f int) *ExchangeOrderAPI {
+	api.req.Action.Builder = &ExchangeOrderActionBuilder{
+		B: GetPointer(b),
+		F: GetPointer(f),
+	}
+	return api
+}
+
+func (api *ExchangeOrderAPI) AddOrders(orders ...Order) *ExchangeOrderAPI {
 	if api.req == nil {
 		api.req = &ExchangeReqCommon[ExchangeOrderAction]{}
 	}
 	if api.req.Action.Orders == nil {
 		api.req.Action.Orders = &[]Order{}
 	}
-	*api.req.Action.Orders = append(*api.req.Action.Orders, order)
+	*api.req.Action.Orders = append(*api.req.Action.Orders, orders...)
 	return api
 }
 
